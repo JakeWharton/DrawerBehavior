@@ -338,7 +338,7 @@ final class BehaviorDelegate extends ViewDragHelper.Callback {
     } else {
       int edge = parent.getWidth() - left;
       offset = (float) edge / childWidth;
-      scrimDrawer.setBounds(0, 0, edge, parent.getHeight());
+      scrimDrawer.setBounds(0, 0, left, parent.getHeight());
     }
 
     int baseAlpha = (scrimColor & 0xff000000) >>> 24;
