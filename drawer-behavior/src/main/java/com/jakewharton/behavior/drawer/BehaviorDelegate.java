@@ -16,6 +16,7 @@
  */
 package com.jakewharton.behavior.drawer;
 
+import android.os.Build;
 import android.os.SystemClock;
 import android.support.design.widget.CoordinatorLayout;
 import android.support.v4.view.GravityCompat;
@@ -36,10 +37,12 @@ final class BehaviorDelegate extends ViewDragHelper.Callback {
   private static final int FLAG_IS_OPENED = 0x1;
   private static final int FLAG_IS_OPENING = 0x2;
   private static final int FLAG_IS_CLOSING = 0x4;
+  private static final int DEFAULT_SCRIM_COLOR = 0x99000000;
 
   private final CoordinatorLayout parent;
   private final View child;
   private final boolean isLeft;
+  private final ContentScrimDrawer scrimDrawer;
   private final ViewDragHelper dragger;
 
   private float initialMotionX;
@@ -49,6 +52,8 @@ final class BehaviorDelegate extends ViewDragHelper.Callback {
   private boolean isPeeking;
   private float onScreen;
   private int drawerState;
+
+  private int scrimColor = DEFAULT_SCRIM_COLOR;
 
   private final Runnable peekRunnable = new Runnable() {
     @Override public void run() {
@@ -77,6 +82,10 @@ final class BehaviorDelegate extends ViewDragHelper.Callback {
     dragger = ViewDragHelper.create(parent, this);
     dragger.setEdgeTrackingEnabled(isLeft ? ViewDragHelper.EDGE_LEFT : ViewDragHelper.EDGE_RIGHT);
     dragger.setMinVelocity(minVel);
+
+    scrimDrawer = Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2
+        ? new ContentScrimDrawer.JellyBeanMr2(parent)
+        : new ContentScrimDrawer.Base(parent, child);
   }
 
   private boolean isContentView(View child) {
@@ -134,7 +143,7 @@ final class BehaviorDelegate extends ViewDragHelper.Callback {
         float y = ev.getY();
         initialMotionX = x;
         initialMotionY = y;
-        if (openState > 0) {
+        if (onScreen > 0) {
           View child = dragger.findTopChildUnder((int) x, (int) y);
           if (child != null && isContentView(child)) {
             interceptForTap = true;
@@ -322,15 +331,25 @@ final class BehaviorDelegate extends ViewDragHelper.Callback {
 
     // This reverses the positioning shown in onLayout.
     float offset;
-    // This reverses the positioning shown in onLayout.
     if (isLeft) {
-      offset = (float) (childWidth + left) / childWidth;
+      int edge = childWidth + left;
+      offset = (float) edge / childWidth;
+      scrimDrawer.setBounds(edge, 0, parent.getWidth(), parent.getHeight());
     } else {
-      int width = parent.getWidth();
-      offset = (float) (width - left) / childWidth;
+      int edge = parent.getWidth() - left;
+      offset = (float) edge / childWidth;
+      scrimDrawer.setBounds(0, 0, edge, parent.getHeight());
     }
+
+    int baseAlpha = (scrimColor & 0xff000000) >>> 24;
+    int imag = (int) (baseAlpha * offset);
+    int color = imag << 24 | (scrimColor & 0xffffff);
+    scrimDrawer.setColor(color);
+
     setDrawerViewOffset(offset);
-    changedView.setVisibility(offset == 0 ? INVISIBLE : VISIBLE);
+    boolean gone = offset == 0;
+    changedView.setVisibility(gone ? INVISIBLE : VISIBLE);
+    scrimDrawer.setVisible(!gone);
     parent.invalidate();
   }
 
